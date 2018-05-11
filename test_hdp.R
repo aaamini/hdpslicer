@@ -15,7 +15,11 @@ plot_ly(out$Y, alpha=0.75) %>%
 out$Kmax
 #attach(out)
 
+library(lineprof)
 
+l <- lineprof(hdp_slice_sampler(out$y, beta0=3, gam0=1, ITRmax=50))
+
+shine(l)
 zh <- hdp_slice_sampler(out$y, beta0=3, gam0=1, ITRmax=50)
 
 
