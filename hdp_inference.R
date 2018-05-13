@@ -1,7 +1,5 @@
 ### HDP inference -- slice sampler ###
 
-
-
 hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5) {
   # y should be list of length J, where each y[[j]] contains the observations for j^th restaurant, i.e., y[[j]] is a matrix of size  n[j] x d where n[j] is the # of observation or customers in res. j
   J <- length(y)
@@ -28,9 +26,10 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
   v_old <- v
   z_old <- z
   
+  z_hist <- list()
   converged <- FALSE  # not used now
   itr <- 1
-  while (itr <= ITRmax && !converged) {
+  while (itr < ITRmax && !converged) {
    
     
     # undpate gamma
@@ -53,7 +52,10 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
       
       if ( Tv[j] > Tjcap[j] ) {
         Tj_overflow <- T
-        Tjcap[j] <- doubling_factor*Tjcap[j] 
+        Tjcap_old <- Tjcap[j]
+        Tjcap[j] <- round( doubling_factor*Tjcap[j] )
+        # pad v with enough atoms
+        v_old[[j]] <- c( v_old[[j]], runif(Tjcap[j]-Tjcap_old) )
         break
       }
     }
@@ -141,15 +143,18 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
     itr <- itr + 1
     if (itr %% 5 == 0) {
       cat(sprintf("%3d: ",itr))
-      cat(round(beta,2),"\n\n")
+      #cat(round(beta,2),"\n\n")
+      cat(table(round(beta,2)),"\n\n")
       #cat('.')
     }
     
+    z_hist[[itr]] <- z
+      
   } # end while
   
-  z
+  #z
+  z_hist
 } # hdp_slice_sampler
-
 
 
 safe_list_prod <- function(prod_list){
@@ -199,7 +204,6 @@ find_tunc_idx <- function(beta, threshold) {
   temp
   
 }
-
 
 ### Auxiliary functions ###
 # samplePmf <- function(n, pmf, normalize=F){

@@ -5,51 +5,65 @@ source('hdp_module.R')
 
 library(MASS)
 library(mvtnorm)
+library(clue)
 
-out <- sample_hdp(n=rep(30,5), J=5, gam0=1, beta0=3)
+nmax <- 100
+out <- sample_hdp(n=rep(nmax,5), J=5, gam0=1, beta0=3)
 
-plot_ly(out$Y, alpha=0.75) %>%
+
+p <- plot_ly(out$Y, alpha=0.75) %>%
   add_trace(x=~x1, y=~x2, color=~factor(id), marker=list(size=5)) %>% #, marker=list(size=~2*id+3)) %>% #
   add_trace(x=~out$phi[,1],y=~out$phi[,2], marker=list(symbol='cross',size=10,color='black'))
+p
 
+# save(out, file="example1.RData")
 out$Kmax
+fname <- paste("n_", nmax, "_K_", out$Kmax,sep="")
+fname
+
+export(p, file=paste("true_clusters", fname, ".pdf"))
+export(p, file=paste("true_clusters", fname, ".png"))
 #attach(out)
 
-library(lineprof)
 
-l <- lineprof(hdp_slice_sampler(out$y, beta0=3, gam0=1, ITRmax=50))
+zh <- hdp_slice_sampler(out$y, beta0=3, gam0=1, ITRmax=75)
 
-shine(l)
-zh <- hdp_slice_sampler(out$y, beta0=3, gam0=1, ITRmax=50)
+# cbind(unlist(zh), unlist(out$z))
 
+compute_aggregate_nmi <- function (z_estim, z){
+  require(clue)
+  tru_labs <- as.cl_hard_partition( unlist(z) )
+  estim_labs <- as.cl_hard_partition( unlist(z_estim) )
+  
+  cl_agreement(estim_labs, tru_labs, method = 'NMI') 
+}
 
-cbind(unlist(zh), unlist(out$z))
+itrMAX <- length(zh)
+nmi <- sapply(2:itrMAX, function(itr) compute_aggregate_nmi(zh[[itr]], out$z))
 
-library(clue)
-tru_labs <- as.cl_hard_partition( unlist(out$z) )
-estim_labs <- as.cl_hard_partition( unlist(zh) )
+p <- plot_ly(x=2:itrMAX, y=nmi) %>% layout(xaxis = list(title="iteration"), yaxis=list(title="NMI"))
+p
 
-nmi <- cl_agreement(estim_labs, tru_labs, method = 'NMI')
-cRand <- cl_agreement(estim_labs, tru_labs, method = "cRand")
-acc <- cl_agreement(estim_labs, tru_labs, method = "diag")
-cat("NMI     = ", round(nmi,3), "\nacc.    = ", round(acc,3), "\nadjRand = ", round(cRand,3), "\n")
-
-
-# cc <- runif(10000, 0, u_upper)
-# temp.df <- data.frame(u = cc, gam= u_upper)
-# aggregate(.~gam, temp.df, function(x) 2*mean(x))
+export(p, file=paste("nmi", fname, ".pdf"))
+export(p, file=paste("nmi", fname, ".png"))
 
 
+#pdf("nmi_1.png")
+#print(p)
+#dev.off()
 
-#k <- 9
-#phi_vec[k,]
-# temp_y <-  matrix(2*rnorm(200),ncol=2)
-# temp_z <- f_vec[[k]](temp_y)
-#plot_ly(x=temp_y[,1], y=temp_y[,2], z=temp_z, marker=list(size=2))
-# plot_ly(x=temp_y[,1], y=temp_y[,2], z=temp_z, type="contour")#, autocontour = F, contours = list(start = .5, end=2, size=.5))
+library(hdp)
+example_data_hdp
 
-# f_vec <- list()
-# for (k in 1:K) {
-#   f_vec[[k]] <-  function(y) Ker(y, phi_vec[k,]) 
-# }
-# f_vec
+set.seed(10)
+quick_chain <- hdp_posterior(out$y, burnin=1, n=50, space=1, seed=1234)
+temp <- hdp_extract_components(quick_chain)
+str(temp)
+plot_comp_size(temp, bty="L", lab=c(3, 5, 7))
+base(quick_chain)
+
+#plot_lik(quick_chain, bty="L")
+# cRand <- cl_agreement(estim_labs, tru_labs, method = "cRand")
+# acc <- cl_agreement(estim_labs, tru_labs, method = "diag")
+# cat("NMI     = ", round(nmi,3), "\nacc.    = ", round(acc,3), "\nadjRand = ", round(cRand,3), "\n")
+
