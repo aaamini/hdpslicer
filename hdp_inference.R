@@ -1,21 +1,41 @@
 ### HDP inference -- slice sampler ###
 
-hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5) {
+hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, Kcap=20, Tcap=20,
+                              doubling_factor=1.5, categorical=F, W=10, cat_prior_alpha=NA, randinit=F) {
   # y should be list of length J, where each y[[j]] contains the observations for j^th restaurant, i.e., y[[j]] is a matrix of size  n[j] x d where n[j] is the # of observation or customers in res. j
+  # for categorical data W should be given and correct!
   J <- length(y)
-  n <- sapply(y, function(x) dim(x)[1])
+  # if (categorical){ # multinomial y[[j]] is n[j] x 1
+  #   n <- sapply(y, function(x) length(x))
+  # }
+  # else { # Gaussian y[[j]] is n[j] x 2 
+  #   n <- sapply(y, function(x) dim(x)[1])    
+  # }
+  if (categorical){ # multinomial y[[j]] is n[j] x 1
+    y <- lapply(y, function(x) as.matrix(x))
+  }
+  
+  n <- sapply(y, function(x) dim(x)[1])   
   
   #Tv <- rep(1,J)
   #Kv <- rep(1,J)
   #K <- max(Kv)
   
-  Kcap <- 20  # hard-coded for now
-  Tjcap <- rep(20,J) # hard-coded for now
+  #Kcap <- 20  # hard-coded for now
+  Tjcap <- rep(Tcap,J) # hard-coded for now
   #Tcap <- Tv
   #Kcap <- K
-  tb <- lapply(1:J, function(j) rep(1,n[j]))
-  kb <- lapply(1:J, function(j) rep(1,Tjcap[j]))
-  z  <- lapply(n,   function(nj) rep(1,nj))
+  if (randinit) {
+    tb <- lapply(1:J, function(j) sample(1:Tjcap[j], size=n[j], replace=T))
+    kb <- lapply(1:J, function(j) sample(1:Kcap, size=Tjcap[j], replace=T))
+    z <-  lapply(1:J, function(j) sapply(1:n[j], function(i) kb[[j]][ tb[[j]][i] ] ))
+                 
+  } else {
+    tb <- lapply(1:J, function(j) rep(1,n[j]))
+    kb <- lapply(1:J, function(j) rep(1,Tjcap[j]))
+    z  <- lapply(n,   function(nj) rep(1,nj))
+    
+  }
    
   u <- lapply(1:J, function(j) runif(n[j]))
   v <- lapply(1:J, function(j) runif(Tjcap[j]))
@@ -26,12 +46,38 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
   v_old <- v
   z_old <- z
   
+  if (categorical) { # multinomial
+    require(extraDistr)
+    #if (any(is.na(cat_prior_alpha))) cat_prior_alpha <- rep(1/W,W)
+    if (any(is.na(cat_prior_alpha))) cat_prior_alpha <- rep(1/W,W)
+    
+    update_phi <- function(y, z, K) {
+      tab <- table( factor(unlist(z), levels=1:K), factor(unlist(y), levels=1:W) )
+      cat_post_alpha <- sweep(tab, 2, cat_prior_alpha, '+')
+      phi <- rdirichlet(K, cat_post_alpha)
+     
+      list(phi=phi, cat_post_alpha=cat_post_alpha) 
+    }
+    
+    Ker <- function(y, phi) {
+      if (length(y) == 0) return(1)
+      phi[y]
+    }
+  
+    
+  } else { # Gaussian
+    update_phi <- update_phi_gauss
+    Ker <- function(y, phi, prec2_y=5^2) {
+      #require(mvtnorm)
+      dmvnorm(y, mean = phi, sigma=diag(1,2)/prec2_y)
+    }
+  }
+  
   z_hist <- list()
   converged <- FALSE  # not used now
   itr <- 1
   while (itr < ITRmax && !converged) {
    
-    
     # undpate gamma
     gamp <- list()
     gam <- list()
@@ -60,7 +106,7 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
       }
     }
     if (Tj_overflow)  {
-      cat('Doubling Tjcap\n')
+      cat('Doubling Tjcap.\n')
       kb <- kb_old
       tb <- tb_old
       u <- u_old
@@ -81,7 +127,7 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
     }
     K <- max(Kv)
     if (K > Kcap)  {
-      cat('Doubling Kcap\n')
+      cat('Doubling Kcap.\n')
       Kcap <- round(doubling_factor*Kcap)
       kb <- kb_old
       tb <- tb_old
@@ -90,6 +136,7 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
       z <- z_old
       next
     }
+    
     
     # if we got here, it is safe to save current state as old state
     kb_old <- kb
@@ -102,11 +149,7 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
     f_vec <- sapply(1:Kcap, function(k) { function(y) Ker(y, phi_vec[k,]) } )
     
     for (j in 1:J) {      
-      # update t
-      for (i in 1:n[j]){
-        prob_vec <- sapply(1:T_all[[j]][i], function(t) f_vec[[  kb[[j]][t] ]]( y[[j]][i,] ) )
-        tb[[j]][i] <- samplePmf( 1, prob_vec)
-      }
+      
       
       # update k
       for (t in 1:Tjcap[j]) {
@@ -114,6 +157,12 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
         prob_vec <- safe_list_prod(prod_list)
         #prob_vec <- sapply( 1:K_all[[j]][t], function(k) prod( f_vec[[k]]( y[[j]][tb[[j]] == t, ] ) ) )
         kb[[j]][t] <- samplePmf( 1, prob_vec)
+      }
+      
+      # update t
+      for (i in 1:n[j]){
+        prob_vec <- sapply(1:T_all[[j]][i], function(t) f_vec[[  kb[[j]][t] ]]( y[[j]][i,] ) )
+        tb[[j]][i] <- samplePmf( 1, prob_vec)
       }
       
       # update u
@@ -142,10 +191,11 @@ hdp_slice_sampler <- function(y, beta0=3, gam0=1, ITRmax=50, doubling_factor=1.5
     
     itr <- itr + 1
     if (itr %% 5 == 0) {
-      cat(sprintf("%3d: ",itr))
-      #cat(round(beta,2),"\n\n")
-      cat(table(round(beta,2)),"\n\n")
-      #cat('.')
+      cat(sprintf("%6d: ",itr),'\n')
+      # cat(table(round(beta,2)),"\n")
+      beta_hist <- hist(beta)
+      cat(beta_hist$mids,"\n")
+      cat(beta_hist$counts,"\n")
     }
     
     z_hist[[itr]] <- z
@@ -162,12 +212,9 @@ safe_list_prod <- function(prod_list){
   sapply(log_sums, function(x) exp(x-max(log_sums)))
 }
 
-Ker <- function(y, phi, prec2_y=5^2) {
-  #require(mvtnorm)
-  dmvnorm(y, mean = phi, sigma=diag(1,2)/prec2_y)
-}
 
-update_phi <- function(y, z, K, prec2_y = 5^2, prec2_phi = 1/(1.5^2)) {
+
+update_phi_gauss <- function(y, z, K, prec2_y = 5^2, prec2_phi = 1/(1.5^2)) {
   require(MASS)
   #require(mvtnorm)
   
@@ -214,6 +261,7 @@ find_tunc_idx <- function(beta, threshold) {
 # }
 samplePmf <- function(n, pmf){
   # automatic normalization of pmf by "sample" (?)
+  # samples from a single pmf
   sample(x = seq(1,length(pmf)), n, replace = T, prob=pmf)  
 }
 

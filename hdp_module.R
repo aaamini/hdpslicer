@@ -1,9 +1,6 @@
 ### HDP inference -- slice sampler ###
 source('hdp_inference.R')
 
-
-
-
 ### Sampling from HDP ###
 sample_gem <- function(alpha, tol=1e-8) {
   
@@ -25,7 +22,11 @@ sample_gem <- function(alpha, tol=1e-8) {
   w[1:Ks]
 }
 
-sample_hdp <- function(n, J, gam0=2, beta0=2) {
+hdp_gauss_likelihood <- function(nj) {
+  matrix(rnorm(2*nj, mean=0, sd=.2), ncol=2)
+}
+
+sample_hdp <- function(n, J, gam0=2, beta0=2, categorical=F, W=10, cat_prior_alpha=1/W) {
   # J : number of rest. 
   # n : a vector of length J
   
@@ -51,18 +52,36 @@ sample_hdp <- function(n, J, gam0=2, beta0=2) {
     z[[j]] <- sapply(seq(1,n[j]), function(i) k[[j]][ t[[j]][i] ])
   }
   
+  
+  if (categorical) {
+    # multinomial
+    require(extraDistr)
+    phi_samp <- function(K) rdirichlet(K, rep(cat_prior_alpha,W))
+    likelihood <- function(phi, zvec, nj)  rcat(nj, phi[zvec,])
+    
+  } else { # Gaussian
+    W <- 2
+    phi_samp <- function(K) matrix(rnorm(2*K,mean=0,sd=1.5),ncol=2) 
+    likelihood <- function(phi, zvec, nj)  {
+      temp <- phi[zvec,] + matrix(rnorm(2*nj, mean=0, sd=.2), ncol=2)
+      colnames(temp) <- c('x1','x2')
+      temp
+    }
+  }
+  
   Kmax <- max(sapply(k, max))
-  phi_samp <- function(K) matrix(rnorm(2*K,mean=0,sd=1.5),ncol=2) 
   phi <-phi_samp(Kmax)
   
   Y <- data.frame()
   for (j in 1:J) {
-    y[[j]] <- phi[z[[j]],] + matrix(rnorm(2*n[j],mean=0,sd=.2), ncol=2)
-    colnames(y[[j]]) <- c('x1','x2')
+    #y[[j]] <- phi[z[[j]],] + matrix(rnorm(2*n[j], mean=0, sd=.2), ncol=2)
+    y[[j]] <- likelihood(phi, z[[j]], n[j])
+    # colnames(y[[j]]) <- c('x1','x2')
     
     Y <- rbind(Y, data.frame(id=j, y[[j]]))
     # Y <- rbind(Y, cbind(y[[j]], data.frame(id=rep(j,n[[j]]))) )
   }
+  
   
   list(Y=Y, y=y, z=z, kb=k, tb=t, beta=beta, gam=gam, phi=phi, Tmax=Tmax, Kmax=Kmax)
 }

@@ -2,6 +2,7 @@ library(plotly)
 plot1 <-function(y) plot_ly(x=seq(1,length(y)),y=~y)
 
 source('hdp_module.R')
+source('hdp_inference_simple.R')
 
 library(MASS)
 library(mvtnorm)
@@ -20,37 +21,39 @@ compute_aggregate_nmi <- function (z_estim, z){
 #   add_trace(x=~out$phi[,1],y=~out$phi[,2], marker=list(symbol='cross',size=10,color='black'))
 # p
 
-# save(out, file="example3.RData")
+
 # out$Kmax
 
 # export(p, file=paste("true_clusters", fname, ".pdf"))
 # export(p, file=paste("true_clusters", fname, ".png"))
 # #attach(out)
 
-#seed <- .Random.seed
-#set.seed(123)
+seed <- .Random.seed
+#set.seed(14586)
 nvec <- c(30,100,300)
 nmax <- max(nvec)
+J <- 50
+# W <- 10;
+out <- sample_hdp(n=rep(nmax,J), J=J, gam0=1, beta0=3, categorical =F)
 fname <- paste("n_", nmax, "_K_", out$Kmax,sep="")
-out <- sample_hdp(n=rep(nmax,5), J=5, gam0=1, beta0=3)
 
 ITRmax <- 60
 nmi <- list()
 for (k in 1:length(nvec)) {
-  print('--- n =  %3d---', nvec[k])
-  curr_y <- lapply(out$y, function(x) x[1:nvec[k],])
+  cat(sprintf('--- n =  %3d---\n', nvec[k]))
+  #curr_y <- lapply(out$y, function(x) x[1:nvec[k],])
+  curr_y <- lapply(out$y, function(x) x[1:nvec[k]])
   curr_z <- lapply(out$z, function(x) x[1:nvec[k]])
   
-  zh <- hdp_slice_sampler(curr_y, beta0=3, gam0=1, ITRmax=ITRmax)
+  zh <- hdp_slice_sampler(curr_y, beta0=3, gam0=1, ITRmax=ITRmax, randinit=F) 
+  # zh <- hdp_slice_samplerC(curr_y, beta0=3, gam0=1, ITRmax=ITRmax, Kcap=20, Tcap=20, W=W)
+  
+  # zh <- hdp_slice_sampler(curr_y, beta0=3, gam0=1, ITRmax=ITRmax, categorical=T, W=W)#, cat_prior_alpha=rep(1/10,10))
   #itrMAX <- length(zh)
   nmi[[k]] <- sapply(2:ITRmax, function(itr) compute_aggregate_nmi(zh[[itr]], curr_z))
   
 }
 
-#nmi_df <- do.call(cbind,nmi)
-#colnames(nmi_df) <- nmax
-#nmi_df
-  
 p <- plot_ly(x=2:ITRmax, width = 600, height = 400) %>% 
   add_markers(y = nmi[[1]], name = 'n = 30', marker=list(symbol="diamond-open-dot")) %>%
   add_markers(y = nmi[[2]], name = 'n = 100') %>%
@@ -66,6 +69,8 @@ export(p, file=paste("nmi", fname, ".png"))
 
 p <- plot_ly(nmi_df, x=2:ITRmax, y=nmi) %>% layout(xaxis = list(title="iteration"), yaxis=list(title="NMI"))
 p
+
+save(out, file="example_cat7.RData")
 
 #pdf("nmi_1.png")
 #print(p)
