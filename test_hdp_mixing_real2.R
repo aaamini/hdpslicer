@@ -41,7 +41,7 @@ curr_y <- y[idx]
 curr_z <- z[idx]
 length(curr_z)
 
-ITRmax <- 1000
+ITRmax <- 100
 #zh <- hdp_slice_sampler_simple(curr_y, beta0=3, gam0=1, ITRmax=ITRmax, W=W, randinit=F) 
  
 zh <- hdp_slice_samplerC(curr_y, beta0=2, gam0=1, ITRmax=ITRmax, Kcap=20, Tcap=20, W=W)
