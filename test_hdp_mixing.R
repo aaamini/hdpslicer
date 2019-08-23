@@ -37,7 +37,7 @@ out <- sample_hdp(n=rep(nmax,5), J=5, gam0=1, beta0=3)
 ITRmax <- 60
 nmi <- list()
 for (k in 1:length(nvec)) {
-  print('--- n =  %3d---', nvec[k])
+  sprintf('--- n =  %3d---', nvec[k])
   curr_y <- lapply(out$y, function(x) x[1:nvec[k],])
   curr_z <- lapply(out$z, function(x) x[1:nvec[k]])
   

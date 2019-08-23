@@ -33,10 +33,19 @@ seed <- .Random.seed
 nvec <- c(30,100,300)
 nmax <- max(nvec)
 J <- 20;
-W <- 20;
+W <- 10;
 out <- sample_hdp(n=rep(nmax,J), J=J, gam0=1, beta0=3, categorical = T, W=W)
 fname <- paste("n_", nmax, "_K_", out$Kmax,"_J_",J,"_W_",W,sep="")
 
+# ## create feq. table 8/23/19
+# y <- out$y
+# z <- out$z
+# y_table <- do.call(rbind, lapply(1:J, function(j) tabulate(y[[j]])))
+# K0 <- max(max(unlist(z)))
+# doclevel_labels <- sapply(1:J, function(j) which.max(tabulate(z[[j]], K0)))
+# doclevel_labels
+
+##
 ITRmax <- 60
 nmi <- list()
 for (k in 1:length(nvec)) {
