@@ -10,7 +10,7 @@
 
 import numpy, codecs
 from datetime import datetime
-import vocabulary
+# import vocabulary
 import time
 from numpy.random import choice
 from numpy import *
