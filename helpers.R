@@ -1,5 +1,38 @@
 require(stm)
 require(purrr)
+
+
+# Change point detection --------------------------------------------------
+
+# Try it with: 
+# breaks = c(0,1,2,69,100)
+intervals_from_breaks = function(breaks) {
+  m = length(breaks)
+  idx = c(1, rep(2:(m-1), each=2), m)
+  Intervals( matrix(breaks[idx], ncol=2, byrow = T) )
+}
+
+detect_change = function(y) {
+  # require(intervals)
+  # require(purrr)
+  n = length(y)
+  # interp = approx(1:n, y, n=5*length(y))
+  out = trendsegment(y)
+  
+  breaks = c(0, out$cpt, n)
+  ints = intervals_from_breaks(breaks) # split into intervals according to break points
+  # new_breaks = c(0, as.matrix(contract(ints, delta=1))[,1], n) # merge short intervals
+  new_breaks = c(as.matrix(contract(ints, delta=1))[,1]-1, n) # merge short intervals
+  # breaks = breaks[c(T, diff(breaks) > 2)]  # remove short intervals
+  
+  interval_sds = unlist( purrr::map( split(y, cut(seq_along(y), new_breaks)), sd) )
+  return( new_breaks[ which.max(interval_sds) + 1 ] )
+}
+
+
+
+# Documment manipulation --------------------------------------------------
+
 # Test compute_aggregate_nmi(word2num(y)$corpus,y)
 # map words in each document in the list to a sequence of numbers
 word2num <- function(y) {
@@ -22,12 +55,21 @@ word2num <- function(y) {
 #   #   return(temp)
 #   adjustedRandIndex(unlist(z), unlist(z_estim))
 # }
-
-
-compute_doc_labels = function(curr_z) {
-  K0 <- max(unlist(curr_z))
-  return( sapply(1:length(curr_z), function(j) which.max(tabulate(curr_z[[j]], K0))) )
+which_most_frequent = function(vec) {
+  as.integer(names(which.max(table(vec))))
 }
+
+# input should be a list otherwise the behavior is unintended
+compute_doc_labels = function(label_vec_list) {
+  # label_vec_list: a list of label vectors -> we return which label in each vector is most frequent
+  # K0 <- max(unlist(curr_z))
+  # return( sapply(1:length(curr_z), function(j) which.max(tabulate(curr_z[[j]], K0))) )
+  return( sapply(label_vec_list, which_most_frequent) )
+}
+
+
+
+
 
 create_docword_freq = function(curr_y) {
   W = max(unlist(curr_y))

@@ -139,7 +139,6 @@ List hdp_infer_C_base(List y, double beta0=3, double gam0=1,
   
   for (int j=0; j < J; j++) {
     for (int i=0; i < n[j]; i++){
-      
       tb(j,i) = 2;// sample_int(10);
       
       zb(j,i) = 1;

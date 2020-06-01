@@ -7,10 +7,13 @@ Rcpp::sourceCpp('hdp_inference.cpp')
 # hdp_slice_samplerC <- function(y, beta0=3, gam0=1, 
 #                                ITRmax=50, Kcap=30, Tcap=30, W=10) {
 #   
-hdp_slice_samplerC <- function(y, beta0=3, gam0=1, ITRmax=50, Kcap=30, Tcap=30) {
-  out <- word2num(y)
-  y <- out$corpus
-  W <- out$nwords
+hdp_slice_samplerC <- function(y, W=NULL, beta0=3, gam0=1, ITRmax=50, Kcap=30, Tcap=30) {
+  if (is.null(W)) {
+    out <- word2num(y)
+    y <- out$corpus
+    W <- out$nwords  
+  }
+
   res <- hdp_infer_C_base(y, beta0=beta0, gam0=gam0, 
                           ITRmax=ITRmax, Kcap=Kcap, Tcap=Tcap, W=W)
   n <- sapply(y, length)
